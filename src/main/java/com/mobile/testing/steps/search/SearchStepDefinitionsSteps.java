@@ -5,6 +5,7 @@ import com.codeborne.selenide.Condition;
 import com.mobile.testing.annotations.Step;
 import com.mobile.testing.screens.search.SearchScreen;
 import com.mobile.testing.screens.search.SearchScreenObjectFactory;
+import io.cucumber.java.en.When;
 
 // TODO -->
 // -- This step for the Search screen should be changed and finished in courses.
@@ -26,7 +27,6 @@ public class SearchStepDefinitionsSteps {
 
     /**
      * <b> Verify if the user can see search results </b>
-     * @param condition - condition to check the visibility of the first search result
      */
     @Step()
     @Then("user can see search results visible")
@@ -41,5 +41,15 @@ public class SearchStepDefinitionsSteps {
     @Then("clear search field")
     public void clearSearchField() {
         searchScreen.clearSearchField();
+    }
+
+    @When("user open search result {string}")
+    public void openSearchResult(final String searchInput) {
+        searchScreen.clickOnSearchResult(searchInput);
+    }
+
+    @Then("user can see Retry button")
+    public void verifyRetryButtonIsVisible() {
+        searchScreen.verifyRetryButtonIsVisible();
     }
 }

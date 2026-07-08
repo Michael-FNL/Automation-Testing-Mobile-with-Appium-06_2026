@@ -39,6 +39,13 @@ public class SearchScreen {
     @iOSXCUITFindBy(xpath = "//XCUIElementTypeImage[@name='Clear query']")
     private SelenideElement clearSearchFieldButton;
 
+    @AndroidFindBy(id = "org.wikipedia:id/view_wiki_error_button")
+    @iOSXCUITFindBy(xpath = "//XCUIElementTypeButton[@name='Retry']")
+    private SelenideElement retryButton;
+
+    private static final String DESCRIPTION_XPATH =
+            "//android.widget.TextView[@resource-id='org.wikipedia:id/page_list_item_description' and @text='%s']";
+
 
     public void waitForMainContainerToAppear() {
         if (testConfig().getOSType() == OSType.IOS) {
@@ -64,5 +71,17 @@ public class SearchScreen {
 
     public void clearSearchField() {
         clearSearchFieldButton.shouldBe(Condition.visible).click();
+    }
+
+    public SelenideElement descriptionByText(String text) {
+        return $(By.xpath(String.format(DESCRIPTION_XPATH, text)));
+    }
+
+    public void clickOnSearchResult(final String searchInput) {
+        descriptionByText(searchInput).shouldBe(Condition.visible).click();
+    }
+
+    public void verifyRetryButtonIsVisible() {
+        retryButton.shouldBe(Condition.visible);
     }
 }
