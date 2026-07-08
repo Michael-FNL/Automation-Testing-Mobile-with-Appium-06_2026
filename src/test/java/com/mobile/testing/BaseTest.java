@@ -2,31 +2,31 @@ package com.mobile.testing;
 
 import com.codeborne.selenide.logevents.SimpleReport;
 import com.mobile.testing.configuration.MobileAppiumDriverFactory;
-import org.testng.ITestContext;
-import org.testng.annotations.AfterClass;
-import org.testng.annotations.BeforeClass;
-
-import static com.codeborne.selenide.Selenide.open;
+import io.cucumber.java.After;
+import io.cucumber.java.Before;
+import io.cucumber.java.Scenario;
+import org.jetbrains.annotations.NotNull;
 
 public class BaseTest {
 
     private final SimpleReport report = new SimpleReport();
     private final MobileAppiumDriverFactory driverFactory = new MobileAppiumDriverFactory();
 
-    @BeforeClass
-    public void createSession() {
+    @Before
+    public void createSession(@NotNull Scenario scenario) {
+        scenario.log("Starting Wikipedia Tests with " + scenario.getName());
         report.start();
+
         driverFactory.getWebDriverInstance();
     }
 
-    public void userOpenApplication() {
-        open();
-    }
+    @After
+    public void closeSession(@NotNull Scenario scenario) {
+        scenario.log("Finished Wikipedia Tests with " + scenario.getName());
 
-    @AfterClass
-    public void closeSession(ITestContext context) {
         driverFactory.closeDriver();
-        report.finish(context.getName());
+
+        report.finish(scenario.getName());
     }
 
 }
