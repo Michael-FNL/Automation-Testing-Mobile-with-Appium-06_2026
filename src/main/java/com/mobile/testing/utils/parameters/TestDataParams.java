@@ -1,6 +1,7 @@
 package com.mobile.testing.utils.parameters;
 
 import com.mobile.testing.utils.properties.MobitruCloudConfig;
+import com.mobile.testing.utils.properties.SauceLabsConfig;
 import com.mobile.testing.utils.properties.TestFrameworkConfig;
 import com.mobile.testing.utils.variables.OSType;
 import com.mobile.testing.utils.variables.RunningPlatform;
@@ -31,9 +32,15 @@ public class TestDataParams {
     private final String mobitruProjectName;
     private final String mobitruAuthorizationKey;
 
+    private final String sauceUsername;
+    private final String sauceAccessKey;
+    private final String sauceDataCenter;
+    private final String sauceBuildName;
+
     private TestDataParams() {
         TestFrameworkConfig testConfig = ConfigFactory.create(TestFrameworkConfig.class);
         MobitruCloudConfig cloudConfig = ConfigFactory.create(MobitruCloudConfig.class);
+        SauceLabsConfig sauceConfig = ConfigFactory.create(SauceLabsConfig.class);
 
         appiumBaseUrl = testConfig.appiumServiceUrl();
 
@@ -51,6 +58,11 @@ public class TestDataParams {
 
         mobitruProjectName = cloudConfig.mobitruProjectName();
         mobitruAuthorizationKey = cloudConfig.mobitruAuthKey();
+
+        sauceUsername = sauceConfig.sauceUsername();
+        sauceAccessKey = sauceConfig.sauceAccessKey();
+        sauceDataCenter = sauceConfig.sauceDataCenter();
+        sauceBuildName = sauceConfig.sauceBuildName();
     }
 
     public static TestDataParams testConfig() {
@@ -113,4 +125,12 @@ public class TestDataParams {
     public String getMobitruAuthorizationKey() {
         return mobitruAuthorizationKey;
     }
+
+    public String getSauceUsername() { return sauceUsername; }
+
+    public String getSauceAccessKey() { return sauceAccessKey; }
+
+    public String getSauceDataCenter() { return sauceDataCenter; }
+
+    public String getSauceBuildName() { return sauceBuildName; }
 }

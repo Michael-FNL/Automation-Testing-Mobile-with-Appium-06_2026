@@ -26,6 +26,7 @@ public class AppiumDriverProvider implements WebDriverProvider {
         switch (testConfig().getRunningPlatform()) {
             case LOCAL -> driver = new AppiumLocalDriver().createDriver();
             case EPAM_CLOUD -> driver = new AppiumRemoteDriver().createDriver();
+            case SAUCELABS -> driver = new AppiumSauceLabsDriver().createDriver();
         }
 
         assert driver != null;
