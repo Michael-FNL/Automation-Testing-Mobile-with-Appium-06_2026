@@ -67,11 +67,11 @@ public class MobitruService {
 
         switch (testConfig().getOSType()) {
             case IOS -> {
-                file = new File("apps/Wikipedia.app");
+                file = new File("src/test/resources/apps/Wikipedia.app");
                 xFileName = "Wikipedia.app";
             }
             case ANDROID -> {
-                file = new File("apps/org.wikipedia.apk");
+                file = new File("src/test/resources/apps/org.wikipedia.apk");
                 xFileName = "org.wikipedia.apk";
             }
         }
