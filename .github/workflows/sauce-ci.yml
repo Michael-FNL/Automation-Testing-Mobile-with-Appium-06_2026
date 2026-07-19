@@ -1,9 +1,10 @@
-name: Android Appium CI (Sauce Labs)
+name: Android Appium CI (Sauce Labs + Mobitru)
 
 # Adapted from "Build and test Android with Gitlab Continuous Integration"
 # (https://medium.com/evenbit/build-and-test-android-with-gitlab-continuous-integration-e51aba6ba53e)
 # using the same build -> test -> package pipeline structure, ported to GitHub Actions
-# for a Java/Maven/Appium/Cucumber/TestNG project running on Sauce Labs.
+# for a Java/Maven/Appium/Cucumber/TestNG project. Runs the same smoke suite against
+# two independent device clouds in parallel: Sauce Labs and Mobitru.
 
 on:
   push:
@@ -18,8 +19,7 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------
-  # STEP 1: Build — compile the project and cache dependencies, the same
-  # role the article's "sdkmanager install + gradle assemble" step plays.
+  # STEP 1: Build — compile the project once, shared by both cloud jobs.
   # ---------------------------------------------------------------------
   build:
     name: Build
@@ -38,20 +38,10 @@ jobs:
       - name: Compile project
         run: mvn -B clean compile test-compile
 
-      - name: Cache target/ for downstream jobs
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-output
-          path: |
-            target/classes
-            target/test-classes
-          retention-days: 1
-
   # ---------------------------------------------------------------------
-  # STEP 2: Test — run the Cucumber/TestNG smoke suite on Sauce Labs,
-  # mirroring the article's "test" stage that reuses the build artifacts.
+  # STEP 2a: Test on Sauce Labs
   # ---------------------------------------------------------------------
-  test:
+  test-saucelabs:
     name: Test on Sauce Labs
     runs-on: ubuntu-latest
     needs: build
@@ -74,17 +64,17 @@ jobs:
           mvn -B clean test \
             -Dsuite=smokeTests/smoke \
             -Drunning.platform=saucelabs \
-            -Dsauce.username=$SAUCE_USERNAME \
-            -Dsauce.access.key=$SAUCE_ACCESS_KEY \
-            -Dsauce.data.center=eu-central-1
+            -Dsauce.username="${SAUCE_USERNAME}" \
+            -Dsauce.access.key="${SAUCE_ACCESS_KEY}" \
+            -Dsauce.data.center=eu-central-1 \
+            -Ddevice.name="Android GoogleAPI Emulator" \
+            -Dplatform.version=11.0
 
-      # Always collect reports, pass/fail, same idea as the article keeping
-      # test artifacts available to the packaging step regardless of result.
-      - name: Upload test reports
+      - name: Upload Sauce Labs reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-reports
+          name: test-reports-saucelabs
           path: |
             target/cucumber-reports
             target/surefire-reports
@@ -92,21 +82,69 @@ jobs:
           if-no-files-found: warn
 
   # ---------------------------------------------------------------------
-  # STEP 3: Package — zip the reports into a single downloadable bundle,
-  # equivalent to the article's "package" stage that zips the APK + build info.
-  # Retention mirrors the article: short-lived on develop, longer on main.
+  # STEP 2b: Test on Mobitru
+  # ---------------------------------------------------------------------
+  test-mobitru:
+    name: Test on Mobitru
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Run smoke suite against Mobitru
+        env:
+          MOBITRU_PROJECT_NAME: ${{ secrets.MOBITRU_PROJECT_NAME }}
+          MOBITRU_AUTH_KEY: ${{ secrets.MOBITRU_AUTH_KEY }}
+        run: |
+          mvn -B clean test \
+            -Dsuite=smokeTests/smoke \
+            -Drunning.platform=epam_cloud \
+            -Dmobitru.project.name="${MOBITRU_PROJECT_NAME}" \
+            -Dmobitru.auth.key="${MOBITRU_AUTH_KEY}" \
+            -Dplatform.version=11
+
+      - name: Upload Mobitru reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-mobitru
+          path: |
+            target/cucumber-reports
+            target/surefire-reports
+          retention-days: 4
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------
+  # STEP 3: Package — zip reports from both clouds into one bundle.
+  # Runs regardless of whether either test job passed or failed.
   # ---------------------------------------------------------------------
   package:
     name: Package reports
     runs-on: ubuntu-latest
-    needs: test
+    needs: [ test-saucelabs, test-mobitru ]
     if: always()
     steps:
-      - name: Download test reports
+      - name: Download Sauce Labs reports
         uses: actions/download-artifact@v4
         with:
-          name: test-reports
-          path: reports
+          name: test-reports-saucelabs
+          path: reports/saucelabs
+        continue-on-error: true
+
+      - name: Download Mobitru reports
+        uses: actions/download-artifact@v4
+        with:
+          name: test-reports-mobitru
+          path: reports/mobitru
+        continue-on-error: true
 
       - name: Add build info file
         run: |
@@ -116,6 +154,8 @@ jobs:
             echo "run_id: ${{ github.run_id }}"
             echo "triggered_by: ${{ github.actor }}"
             echo "date: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            echo "sauce_labs_result: ${{ needs.test-saucelabs.result }}"
+            echo "mobitru_result: ${{ needs.test-mobitru.result }}"
           } > reports/build-info.txt
 
       - name: Zip report bundle
