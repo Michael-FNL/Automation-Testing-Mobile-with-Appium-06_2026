@@ -24,7 +24,7 @@ public class BaseTest {
     public void closeSession(@NotNull Scenario scenario) {
         scenario.log("Finished Wikipedia Tests with " + scenario.getName());
 
-        driverFactory.closeDriver();
+        driverFactory.closeDriver(!scenario.isFailed());
 
         report.finish(scenario.getName());
     }

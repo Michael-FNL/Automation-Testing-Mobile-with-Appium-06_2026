@@ -9,6 +9,7 @@ import com.mobile.testing.utils.variables.RunningPlatform;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebDriverException;
 import org.openqa.selenium.support.events.AbstractWebDriverEventListener;
+import org.openqa.selenium.JavascriptExecutor;
 
 import java.util.Optional;
 
@@ -41,11 +42,36 @@ public class MobileAppiumDriverFactory {
         }
     }
 
+//    @Step("Shut down the driver")
+//    public void closeDriver() {
+//        try {
+//            if (testConfig().getRunningPlatform() == RunningPlatform.EPAM_CLOUD) {
+//                Optional.of(WebDriverRunner.driver().getWebDriver()).ifPresent(WebDriver::quit);
+//            }
+//            closeWebDriver();
+//        } catch (WebDriverException e) {
+//            throw new RuntimeException(e);
+//        }
+//    }
+
     @Step("Shut down the driver")
-    public void closeDriver() {
+    public void closeDriver(boolean testPassed) {
         try {
-            if (testConfig().getRunningPlatform() == RunningPlatform.EPAM_CLOUD) {
-                Optional.of(WebDriverRunner.driver().getWebDriver()).ifPresent(WebDriver::quit);
+            if (testConfig().getRunningPlatform() == RunningPlatform.EPAM_CLOUD
+                    || testConfig().getRunningPlatform() == RunningPlatform.SAUCELABS) {
+
+                if (!WebDriverRunner.hasWebDriverStarted()) {
+                    return;
+                }
+
+                WebDriver driver = WebDriverRunner.driver().getWebDriver();
+
+                if (testConfig().getRunningPlatform() == RunningPlatform.SAUCELABS) {
+                    ((JavascriptExecutor) driver)
+                            .executeScript("sauce:job-result=" + (testPassed ? "passed" : "failed"));
+                }
+
+                Optional.of(driver).ifPresent(WebDriver::quit);
             }
             closeWebDriver();
         } catch (WebDriverException e) {

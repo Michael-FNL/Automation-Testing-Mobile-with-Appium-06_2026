@@ -1,0 +1,140 @@
+name: Android Appium CI (Sauce Labs)
+
+# Adapted from "Build and test Android with Gitlab Continuous Integration"
+# (https://medium.com/evenbit/build-and-test-android-with-gitlab-continuous-integration-e51aba6ba53e)
+# using the same build -> test -> package pipeline structure, ported to GitHub Actions
+# for a Java/Maven/Appium/Cucumber/TestNG project running on Sauce Labs.
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch: {}
+
+env:
+  JAVA_VERSION: '17'
+  MAVEN_OPTS: '-Dmaven.repo.local=.m2/repository'
+
+jobs:
+  # ---------------------------------------------------------------------
+  # STEP 1: Build — compile the project and cache dependencies, the same
+  # role the article's "sdkmanager install + gradle assemble" step plays.
+  # ---------------------------------------------------------------------
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Compile project
+        run: mvn -B clean compile test-compile
+
+      - name: Cache target/ for downstream jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: |
+            target/classes
+            target/test-classes
+          retention-days: 1
+
+  # ---------------------------------------------------------------------
+  # STEP 2: Test — run the Cucumber/TestNG smoke suite on Sauce Labs,
+  # mirroring the article's "test" stage that reuses the build artifacts.
+  # ---------------------------------------------------------------------
+  test:
+    name: Test on Sauce Labs
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Run smoke suite against Sauce Labs
+        env:
+          SAUCE_USERNAME: ${{ secrets.SAUCE_USERNAME }}
+          SAUCE_ACCESS_KEY: ${{ secrets.SAUCE_ACCESS_KEY }}
+        run: |
+          mvn -B clean test \
+            -Dsuite=smokeTests/smoke \
+            -Drunning.platform=saucelabs \
+            -Dsauce.username=$SAUCE_USERNAME \
+            -Dsauce.access.key=$SAUCE_ACCESS_KEY \
+            -Dsauce.data.center=eu-central-1
+
+      # Always collect reports, pass/fail, same idea as the article keeping
+      # test artifacts available to the packaging step regardless of result.
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            target/cucumber-reports
+            target/surefire-reports
+          retention-days: 4
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------
+  # STEP 3: Package — zip the reports into a single downloadable bundle,
+  # equivalent to the article's "package" stage that zips the APK + build info.
+  # Retention mirrors the article: short-lived on develop, longer on main.
+  # ---------------------------------------------------------------------
+  package:
+    name: Package reports
+    runs-on: ubuntu-latest
+    needs: test
+    if: always()
+    steps:
+      - name: Download test reports
+        uses: actions/download-artifact@v4
+        with:
+          name: test-reports
+          path: reports
+
+      - name: Add build info file
+        run: |
+          {
+            echo "commit: ${{ github.sha }}"
+            echo "branch: ${{ github.ref_name }}"
+            echo "run_id: ${{ github.run_id }}"
+            echo "triggered_by: ${{ github.actor }}"
+            echo "date: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          } > reports/build-info.txt
+
+      - name: Zip report bundle
+        run: |
+          cd reports
+          zip -r ../smoke-test-report-${{ github.run_number }}.zip .
+
+      - name: Set retention days by branch
+        id: retention
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "days=30" >> "$GITHUB_OUTPUT"
+          else
+            echo "days=3" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload packaged report
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-report-${{ github.run_number }}
+          path: smoke-test-report-${{ github.run_number }}.zip
+          retention-days: ${{ steps.retention.outputs.days }}
